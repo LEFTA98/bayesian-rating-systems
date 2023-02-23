@@ -8,11 +8,10 @@ import copy
 import pandas as pd
 import numpy as np
 
-from product_utils import ProductHelper, sample_chosen_df
-from choice_models.multi_armed_bandit import random_argmax, ts_action
+from .product_utils import ProductHelper, sample_chosen_df
+from .choice_models.multi_armed_bandit import random_argmax, ts_action
 
 DEFAULT_SELECTION = "thompson_sampling"
-DEFAULT_PROCESSES = -1
 DEFAULT_NUM_TIMESTEPS = 5000000
 DEFAULT_RHO = 0.01
 DEFAULT_MKT_SIZE = 5
@@ -45,7 +44,8 @@ class SimRunner:
         if not snapshot_start:
             snapshot_start = timesteps // 5
         product_data = dict(zip(videos, [[] for _ in range(len(videos))]))
-        priors_dict = dict(zip(videos, [priors.copy()[i, :] for i in range(priors.shape[0])]))
+        priors_list = [copy.deepcopy(priors) for _ in range(len(videos))]
+        priors_dict = dict(zip(videos, priors_list))
         snapshot_dict = dict()
         snapshot_num = 1
 
