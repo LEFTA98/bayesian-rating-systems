@@ -54,6 +54,7 @@ class Simulator:
 
         input_df = self._data_cleaner.test_data
         products = list(self._data_cleaner.test_quality.keys())
+        weights = self._data_cleaner.weights
 
         prior_array = np.expand_dims(np.array(self.prior), 1)
         etas_array = np.expand_dims(np.array(etas), 1)
@@ -64,6 +65,7 @@ class Simulator:
         if num_threads == 1:
             data, snapshots, market_histories = self._simulation_runner.run_single_simulation(input_df,
                                                                                               products,
+                                                                                              weights,
                                                                                               priors_to_test[0],
                                                                                               timesteps=timesteps,
                                                                                               rho=rho,
@@ -78,6 +80,7 @@ class Simulator:
             parallel = Parallel(n_jobs=min(len(etas), num_threads), verbose=10)
             result_data = parallel(delayed(self._simulation_runner.run_single_simulation)(input_df,
                                                                                           products,
+                                                                                          weights,
                                                                                           priors_to_test[i],
                                                                                           timesteps=timesteps,
                                                                                           rho=rho,

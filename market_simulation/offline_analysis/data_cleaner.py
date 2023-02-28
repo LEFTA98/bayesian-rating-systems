@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 
 BERNOULLI_RATINGS_NAME = "bernoulli"
-CATEGORIAL_RATINGS_NAME = "categorical"
+CATEGORICAL_RATINGS_NAME = "categorical"
 
 
 def _convert_to_bernoulli(data: pd.DataFrame, ratings_col: str):
@@ -26,6 +26,7 @@ class DataCleaner:
         self.train_quality = None
         self.test_quality = None
         self.test_data = None
+        self.weights = None
 
     def ingest(self,
                data: pd.DataFrame,
@@ -37,6 +38,9 @@ class DataCleaner:
 
         if self.ratings_style == BERNOULLI_RATINGS_NAME:
             data = _convert_to_bernoulli(data, ratings_col)
+            self.weights = np.array([0, 1])
+        elif self.ratings_style == CATEGORICAL_RATINGS_NAME:
+            self.weights = np.sort(np.unique(data[ratings_col].values))
 
         df = data.groupby([product_col]).mean(numeric_only=True)[ratings_col]
         self.train_quality, self.test_quality = train_test_split(df, test_size=split, random_state=rng)

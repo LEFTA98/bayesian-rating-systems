@@ -26,7 +26,7 @@ class ProductHelper:
     def pull_arm(self, action, like):
         arr = self.market[action]
         latest_action = copy.deepcopy(arr[-1])
-        latest_action += np.array([like, 1 - like])
+        latest_action[like] += 1
         self.market[action] = np.append(arr, [latest_action], axis=0)
 
     def pull_arm_update_market(self, action, like):

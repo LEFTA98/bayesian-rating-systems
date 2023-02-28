@@ -18,7 +18,7 @@ DEFAULT_MKT_SIZE = 5
 DEFAULT_NUM_USERS = 1
 DEFAULT_SNAPSHOT_PROB = 0.001
 
-DEFAULT_CHOICE_FN_MAPPING = {"thompson_sampling": ts_action}
+DEFAULT_CHOICE_FN_MAPPING = {("bernoulli", "thompson_sampling"): ts_action}
 
 
 class SimRunner:
@@ -29,7 +29,8 @@ class SimRunner:
 
     def run_single_simulation(self,
                               input_df: pd.DataFrame,
-                              videos: List[str],
+                              products: List[str],
+                              weights: np.ndarray,
                               priors: np.ndarray,
                               timesteps: int = DEFAULT_NUM_TIMESTEPS,
                               rho: float = DEFAULT_RHO,
@@ -40,17 +41,17 @@ class SimRunner:
                               seed: Union[bool, int] = None,
                               id_name: Union[bool, str] = None):
         rng = np.random.default_rng(seed)
-        sampling_action = DEFAULT_CHOICE_FN_MAPPING[self.selection_style]
+        sampling_action = DEFAULT_CHOICE_FN_MAPPING[(self.ratings_style, self.selection_style)]
         if not snapshot_start:
             snapshot_start = timesteps // 5
-        product_data = dict(zip(videos, [[] for _ in range(len(videos))]))
-        priors_list = [copy.deepcopy(priors) for _ in range(len(videos))]
-        priors_dict = dict(zip(videos, priors_list))
+        product_data = dict(zip(products, [[] for _ in range(len(products))]))
+        priors_list = [copy.deepcopy(priors) for _ in range(len(products))]
+        priors_dict = dict(zip(products, priors_list))
         snapshot_dict = dict()
         snapshot_num = 1
 
-        curr_vids = np.array(list(rng.choice(videos, mkt_size, replace=False)))
-        remaining_vids = set(videos).difference(set(curr_vids))
+        curr_vids = np.array(list(rng.choice(products, mkt_size, replace=False)))
+        remaining_vids = set(products).difference(set(curr_vids))
 
         helper = ProductHelper(product_data, curr_vids, list(curr_vids), priors_dict)
         market_history = []
@@ -61,13 +62,12 @@ class SimRunner:
 
             market_history.append(copy.deepcopy(helper.mkt_ids))
             latest_sims = np.array([item[-1] for item in helper.market])
-            successes, failures = latest_sims[:, 0], latest_sims[:, 1]
             actions = range(mkt_size)
             for m in range(num_users):
-                a = sampling_action(actions, successes, failures, rng=None)
-                chosen_action_global_index = videos.index(helper.mkt_ids[a])
+                a = sampling_action(actions, weights, latest_sims, rng=None)
+                chosen_action_global_index = products.index(helper.mkt_ids[a])
                 market_history[-1].append(copy.deepcopy(helper.mkt_ids[a]))
-                like = sample_chosen_df(videos, input_df, chosen_action_global_index, rng=None)
+                like = sample_chosen_df(products, input_df, chosen_action_global_index, rng=None)
 
                 # update prior
                 helper.pull_arm_update_market(a, like)
@@ -85,7 +85,7 @@ class SimRunner:
             remaining_vids = remaining_vids.union(replaced).difference(replenishments)
 
             # ensure that the remaining videos are distinct size is constant
-            if len(list(remaining_vids)) != len(videos) - mkt_size:
+            if len(list(remaining_vids)) != len(products) - mkt_size:
                 print('remaining_vids', len(list(remaining_vids)))
                 print('curr_vids', helper.mkt_ids)
                 print('replenishments', replenishments)
