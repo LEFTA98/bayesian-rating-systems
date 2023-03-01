@@ -22,6 +22,7 @@ def _fit_bernoulli_data(fit_data: pd.DataFrame, ratings_col: str) -> Tuple[float
                                              for i in data.values], floc=0, fscale=1)
     return prior_b, prior_a
 
+
 def _fit_categorical_data(fit_data: pd.DataFrame, n_iter: int):
 
     data = np.divide(fit_data.to_numpy(), np.array([np.sum(fit_data.to_numpy(), axis=1)

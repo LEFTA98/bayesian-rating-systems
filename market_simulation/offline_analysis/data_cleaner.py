@@ -27,6 +27,7 @@ class DataCleaner:
         self.test_quality = None
         self.test_data = None
         self.weights = None
+        self.products_list = None
 
     def ingest(self,
                data: pd.DataFrame,
@@ -49,19 +50,25 @@ class DataCleaner:
 
         if self.ratings_style == BERNOULLI_RATINGS_NAME:
             df[ratings_col] = df[1]/(df[0] + df[1])
+
         self.train_quality, self.test_quality = train_test_split(df, test_size=split, random_state=rng)
         self.test_data = data[data[product_col].isin(list(self.test_quality.index))]
         self.product_col = product_col
         self.ratings_col = ratings_col
+        self.products_list = list(set(data[product_col]))
 
-    #TODO test out this function!!!
     def upsample(self, num_samples: int) -> None:
         percentiles = np.linspace(0, 100, num_samples + 1) / 100
 
-        df = self.test_quality
-        df['ranking_quality'] = df.to_numpy() @ self.weights/ np.sum(df.to_numpy, axis=1)
-        df = self.test_quality.drop_duplicates().sort_values(by='ranking_quality', axis=0)
+        df = copy.deepcopy(self.test_quality).drop_duplicates()
+
+        if self.ratings_style == BERNOULLI_RATINGS_NAME:
+            df = df.drop(columns=[self.ratings_col])
+
+        df['ranking_quality'] = df.to_numpy() @ self.weights/np.sum(df.to_numpy(), axis=1)
+        df = df.sort_values(by='ranking_quality', axis=0)
         percentiles = np.round(percentiles * len(df)).astype(int)
         percentiles = percentiles[:-1]  # 100th percentile doesn't exist omit it
-        sampled_products = list(df.iloc[percentiles][self.product_col])
+        sampled_products = list(df.iloc[percentiles].index)
         self.test_data = self.test_data[self.test_data[self.product_col].isin(sampled_products)]
+        self.products_list = sampled_products

@@ -70,7 +70,7 @@ class SimRunner:
             latest_sims = np.array([item[-1] for item in helper.market])
             actions = range(mkt_size)
             for m in range(num_users):
-                a = sampling_action(actions, weights, latest_sims, rng=None)
+                a = sampling_action(actions, weights, latest_sims, rng=rng)
                 chosen_action_global_index = products.index(helper.mkt_ids[a])
                 market_history[-1].append(copy.deepcopy(helper.mkt_ids[a]))
                 like = sample_chosen_df(products,
@@ -78,7 +78,7 @@ class SimRunner:
                                         chosen_action_global_index,
                                         product_col,
                                         rating_col,
-                                        rng=None)
+                                        rng=rng)
 
                 slot = like_to_slot_dict[like]
 
