@@ -179,5 +179,7 @@ class BayesianRatingsManager:
             ax.annotate(f"{labels[i]}", (x[i], y[i]))
 
         if savefigs:
-            plt.savefig(f"{dir_path}/{str(datetime.now())}.pdf")
+            plt.savefig(f"{dir_path}/{str(datetime.now())}+pareto curve.pdf")
+
         plt.show()
+        plt.clf()

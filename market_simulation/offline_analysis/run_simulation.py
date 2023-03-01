@@ -70,7 +70,7 @@ class SimRunner:
             latest_sims = np.array([item[-1] for item in helper.market])
             actions = range(mkt_size)
             for m in range(num_users):
-                a = sampling_action(actions, weights, latest_sims, rng=rng)
+                a = sampling_action(actions, weights, latest_sims, rng=None)
                 chosen_action_global_index = products.index(helper.mkt_ids[a])
                 market_history[-1].append(copy.deepcopy(helper.mkt_ids[a]))
                 like = sample_chosen_df(products,
@@ -78,7 +78,7 @@ class SimRunner:
                                         chosen_action_global_index,
                                         product_col,
                                         rating_col,
-                                        rng=rng)
+                                        rng=None)
 
                 slot = like_to_slot_dict[like]
 
@@ -87,8 +87,11 @@ class SimRunner:
 
             # replenish the indices
             flips = rng.binomial(1, rho, mkt_size)
-            draws = rng.choice(list(remaining_vids) +
-                               [helper.mkt_ids[i] for i in range(len(helper.mkt_ids)) if flips[i]==1], mkt_size,replace=False)
+
+            draws = rng.choice(sorted(list(remaining_vids)) +
+                               [helper.mkt_ids[i] for i in range(len(helper.mkt_ids)) if flips[i] == 1],
+                               mkt_size,
+                               replace=False)
 
             replenishments = [draws[i] for i in range(draws.shape[0]) if flips[i] == 1]
             replaced = [helper.mkt_ids[i] for i in range(draws.shape[0]) if flips[i] == 1]
