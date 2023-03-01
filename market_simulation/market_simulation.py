@@ -35,8 +35,8 @@ class Simulator:
     def add_data(self, data: pd.DataFrame, product_col: str, ratings_col: str) -> None:
         self._data_cleaner.ingest(data, product_col, ratings_col)
 
-    def fit_prior(self) -> Tuple[float, ...]:
-        priors = self._prior_fitter.fit(self._data_cleaner.train_quality)
+    def fit_prior(self, n_iters: int = 1000) -> Tuple[float, ...]:
+        priors = self._prior_fitter.fit(self._data_cleaner.train_quality, self._data_cleaner.ratings_col)
         self.prior = priors
         return priors
 
@@ -49,12 +49,14 @@ class Simulator:
                         mkt_size: int = sim.DEFAULT_MKT_SIZE,
                         num_users: int = sim.DEFAULT_NUM_USERS,
                         rng: Union[None, int] = None) -> None:
-        if not self.prior:
+        if self.prior is None:
             self.fit_prior()
 
         input_df = self._data_cleaner.test_data
-        products = list(self._data_cleaner.test_quality.keys())
+        products = list(set(self._data_cleaner.test_quality.index))
         weights = self._data_cleaner.weights
+        product_col = self._data_cleaner.product_col
+        rating_col = self._data_cleaner.ratings_col
 
         prior_array = np.expand_dims(np.array(self.prior), 1)
         etas_array = np.expand_dims(np.array(etas), 1)
@@ -67,6 +69,8 @@ class Simulator:
                                                                                               products,
                                                                                               weights,
                                                                                               priors_to_test[0],
+                                                                                              product_col,
+                                                                                              rating_col,
                                                                                               timesteps=timesteps,
                                                                                               rho=rho,
                                                                                               mkt_size=mkt_size,
@@ -82,6 +86,8 @@ class Simulator:
                                                                                           products,
                                                                                           weights,
                                                                                           priors_to_test[i],
+                                                                                          product_col,
+                                                                                          rating_col,
                                                                                           timesteps=timesteps,
                                                                                           rho=rho,
                                                                                           mkt_size=mkt_size,
@@ -97,10 +103,10 @@ class Simulator:
 
 
     def get_snapshot_data(self):
-        pass
+        return self.output_snapshots
 
     def get_market_data(self):
-        pass
+        return self.output_market_history
 
     def get_simulation_data(self):
-        pass
+        return self.output_market_data

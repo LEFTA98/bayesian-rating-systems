@@ -4,13 +4,13 @@ import numpy as np
 import copy
 
 
-def sample_chosen_df(videos, chosen_df, action_index, rng=None):
+def sample_chosen_df(videos, chosen_df, action_index, product_col, rating_col, rng=None):
     """helper function for sampling products from an input dataset."""
     if not rng:
         rng = np.random.default_rng()
 
     vid = videos[action_index]
-    seen_like = chosen_df[chosen_df['video_id'] == vid].sample(1, random_state=rng).iloc[0]['liked']
+    seen_like = chosen_df[chosen_df[product_col] == vid].sample(1, random_state=rng).iloc[0][rating_col]
     return seen_like
 
 

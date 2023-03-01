@@ -18,7 +18,8 @@ DEFAULT_MKT_SIZE = 5
 DEFAULT_NUM_USERS = 1
 DEFAULT_SNAPSHOT_PROB = 0.001
 
-DEFAULT_CHOICE_FN_MAPPING = {("bernoulli", "thompson_sampling"): ts_action}
+DEFAULT_CHOICE_FN_MAPPING = {("bernoulli", "thompson_sampling"): ts_action,
+                             ("categorical", "thompson_sampling"): ts_action}
 
 
 class SimRunner:
@@ -32,6 +33,8 @@ class SimRunner:
                               products: List[str],
                               weights: np.ndarray,
                               priors: np.ndarray,
+                              product_col: str,
+                              rating_col: str,
                               timesteps: int = DEFAULT_NUM_TIMESTEPS,
                               rho: float = DEFAULT_RHO,
                               mkt_size: int = DEFAULT_MKT_SIZE,
@@ -54,6 +57,9 @@ class SimRunner:
         remaining_vids = set(products).difference(set(curr_vids))
 
         helper = ProductHelper(product_data, curr_vids, list(curr_vids), priors_dict)
+
+        unique_ratings_vals = list(set(input_df[rating_col].values))
+        like_to_slot_dict = {k: v for k, v in zip(sorted(unique_ratings_vals), range(len(unique_ratings_vals)))}
         market_history = []
 
         for t in range(timesteps):
@@ -67,21 +73,26 @@ class SimRunner:
                 a = sampling_action(actions, weights, latest_sims, rng=None)
                 chosen_action_global_index = products.index(helper.mkt_ids[a])
                 market_history[-1].append(copy.deepcopy(helper.mkt_ids[a]))
-                like = sample_chosen_df(products, input_df, chosen_action_global_index, rng=None)
+                like = sample_chosen_df(products,
+                                        input_df,
+                                        chosen_action_global_index,
+                                        product_col,
+                                        rating_col,
+                                        rng=None)
+
+                slot = like_to_slot_dict[like]
 
                 # update prior
-                helper.pull_arm_update_market(a, like)
+                helper.pull_arm_update_market(a, slot)
 
             # replenish the indices
             flips = rng.binomial(1, rho, mkt_size)
             draws = rng.choice(list(remaining_vids) +
                                [helper.mkt_ids[i] for i in range(len(helper.mkt_ids)) if flips[i]==1], mkt_size,replace=False)
 
-            replenishments = flips * draws
-            replaced = flips * helper.mkt_ids
-            swapped_pairs = zip(list(replaced[replaced != 0].flatten()), list(replenishments[replenishments != 0].flatten()))
-            replenishments = set(replenishments[replenishments != 0].flatten().astype(int))
-            replaced = set(replaced[replaced != 0].flatten().astype(int))
+            replenishments = [draws[i] for i in range(draws.shape[0]) if flips[i] == 1]
+            replaced = [helper.mkt_ids[i] for i in range(draws.shape[0]) if flips[i] == 1]
+            swapped_pairs = zip(replaced, replenishments)
             remaining_vids = remaining_vids.union(replaced).difference(replenishments)
 
             # ensure that the remaining videos are distinct size is constant
