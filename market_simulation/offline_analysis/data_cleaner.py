@@ -34,7 +34,8 @@ class DataCleaner:
                product_col: str,
                ratings_col: str,
                split: float = 0.4,
-               rng: Union[None, int] = None) -> None:
+               rng: Union[None, int] = None,
+               cutoff: Union[None, int] = None) -> None:
         self.raw_data = copy.deepcopy(data)
 
         if self.ratings_style == BERNOULLI_RATINGS_NAME:
@@ -47,6 +48,9 @@ class DataCleaner:
         df['dummy'] = 1
         df = df.pivot_table(index=product_col, columns=ratings_col, values='dummy', aggfunc=np.sum)
         df = df.fillna(0)
+
+        if cutoff is not None:
+            df = df[df.sum(axis=1) >= cutoff]
 
         if self.ratings_style == BERNOULLI_RATINGS_NAME:
             df[ratings_col] = df[1]/(df[0] + df[1])

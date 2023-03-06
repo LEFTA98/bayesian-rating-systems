@@ -7,9 +7,10 @@ import copy
 
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 from .product_utils import ProductHelper, sample_chosen_df
-from .choice_models.multi_armed_bandit import random_argmax, ts_action
+from .choice_models.multi_armed_bandit import ts_action
 
 DEFAULT_SELECTION = "thompson_sampling"
 DEFAULT_NUM_TIMESTEPS = 5000000
@@ -62,10 +63,7 @@ class SimRunner:
         like_to_slot_dict = {k: v for k, v in zip(sorted(unique_ratings_vals), range(len(unique_ratings_vals)))}
         market_history = []
 
-        for t in range(timesteps):
-            if (t + 1) % (timesteps // 10) == 0:
-                print(f'{t + 1}/{timesteps}')
-
+        for t in tqdm(range(timesteps)):
             market_history.append(copy.deepcopy(helper.mkt_ids))
             latest_sims = np.array([item[-1] for item in helper.market])
             actions = range(mkt_size)
