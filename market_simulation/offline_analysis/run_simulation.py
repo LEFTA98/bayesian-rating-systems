@@ -43,7 +43,8 @@ class SimRunner:
                               snapshot_start: Union[bool, int] = None,
                               snapshotting_prob: int = DEFAULT_SNAPSHOT_PROB,
                               seed: Union[bool, int] = None,
-                              id_name: Union[bool, str] = None):
+                              id_name: Union[bool, str] = None,
+                              show_tqdm: bool = True):
         rng = np.random.default_rng(seed)
         sampling_action = DEFAULT_CHOICE_FN_MAPPING[(self.ratings_style, self.selection_style)]
         if not snapshot_start:
@@ -63,7 +64,12 @@ class SimRunner:
         like_to_slot_dict = {k: v for k, v in zip(sorted(unique_ratings_vals), range(len(unique_ratings_vals)))}
         market_history = []
 
-        for t in tqdm(range(timesteps)):
+        if show_tqdm:
+            range_to_iterate = tqdm(range(timesteps))
+        else:
+            range_to_iterate = range(timesteps)
+
+        for t in range_to_iterate:
             market_history.append(copy.deepcopy(helper.mkt_ids))
             latest_sims = np.array([item[-1] for item in helper.market])
             actions = range(mkt_size)

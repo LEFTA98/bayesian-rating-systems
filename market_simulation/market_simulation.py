@@ -10,6 +10,8 @@ from datetime import datetime
 import contextlib
 import warnings
 
+from dash import Dash, dcc, html, Input, Output
+from jupyter_dash import JupyterDash
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -17,6 +19,7 @@ import joblib
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
 
 from offline_analysis.prior_fitter import PriorFitter
 from offline_analysis.data_cleaner import DataCleaner, BERNOULLI_RATINGS_NAME, CATEGORICAL_RATINGS_NAME
@@ -188,7 +191,8 @@ class BayesianRatingsManager:
                                                                                               mkt_size=mkt_size,
                                                                                               num_users=num_users,
                                                                                               seed=rng,
-                                                                                              id_name=prior_names[i])
+                                                                                              id_name=prior_names[i],
+                                                                                              show_tqdm=False)
                                        for i in range(len(prior_names)))
                 result_data = list(result_data)
             for data, snapshots, market_histories in result_data:
@@ -241,17 +245,18 @@ class BayesianRatingsManager:
 
         if self.ratings_style == BERNOULLI_RATINGS_NAME:
             df = df.drop(columns=[self._data_cleaner.ratings_col])
-        df['agg_rating'] = df.to_numpy() @ self._data_cleaner.weights
+        df['agg_rating'] = df.to_numpy()/np.repeat(df.to_numpy().sum(axis=1)[:, np.newaxis],
+                                                   df.shape[1], axis=1) @ self._data_cleaner.weights
         qual_dict = df['agg_rating'].to_dict()
         qfunc = np.vectorize(lambda x: qual_dict[x])
 
-        md, ss, mh = self.output_market_data, self.output_snapshots, self.output_market_history
+        md, ss, mh = self.get_simulation_data(), self.get_snapshot_data(), self.get_market_data()
 
         to_plot = []
 
         for i in range(len(md)):
             market_hist = qfunc(mh[i])
-            regret = np.sum(np.max(market_hist[:, :-1], axis=1) - market_hist[:, -1])
+            regret = np.sum(np.max(market_hist[:, :-1], axis=1) - market_hist[:, -1])/market_hist.shape[0]
             std = get_average_plays_std(md[i])
             eta = list(md[i].keys())[0][1]
 
@@ -265,8 +270,8 @@ class BayesianRatingsManager:
         fig, ax = plt.subplots()
         fig.set_size_inches(12, 6)
         ax.scatter(x, y)
-        plt.xlabel('avg standard deviation in play %')
-        plt.ylabel('total regret')
+        plt.xlabel('Producer Consistency (average standard deviation in play %)')
+        plt.ylabel('Consumer Efficiency (per-timestep regret)')
 
         for i in range(labels.shape[0]):
             ax.annotate(f"{labels[i]}", (x[i], y[i]))
@@ -356,3 +361,273 @@ class BayesianRatingsManager:
         self._show_pareto_frontier(savefigs=savefigs, dir_path=dir_path)
 
         self._show_by_quality_plot(savefigs=savefigs, dir_path=dir_path)
+
+    def _get_pareto_frontier_data(self):
+        def get_average_plays_std(datadict):
+            a = []
+            for item in datadict:
+                l_array = []
+                for lifespan in datadict[item]:
+                    if lifespan.shape[0] > 1:
+                        l_array.append((np.sum(lifespan[-1]) - np.sum(lifespan[0])) / (lifespan.shape[0] - 1))
+
+                a.append(np.std(l_array))
+
+            return np.mean(a)
+        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.products_list])
+
+        if self.ratings_style == BERNOULLI_RATINGS_NAME:
+            df = df.drop(columns=[self._data_cleaner.ratings_col])
+        df['agg_rating'] = df.to_numpy()/np.repeat(df.to_numpy().sum(axis=1)[:, np.newaxis],
+                                                   df.shape[1], axis=1) @ self._data_cleaner.weights
+        qual_dict = df['agg_rating'].to_dict()
+        qfunc = np.vectorize(lambda x: qual_dict[x])
+
+        md, ss, mh = self.output_market_data, self.output_snapshots, self.output_market_history
+
+        to_plot = []
+
+        for i in range(len(md)):
+            market_hist = qfunc(mh[i])
+            regret = np.sum(np.max(market_hist[:, :-1], axis=1) - market_hist[:, -1])/market_hist.shape[0]
+            std = get_average_plays_std(md[i])
+            eta = list(md[i].keys())[0][1]
+
+            to_plot.append(pd.DataFrame([[eta, std, regret]], columns=['etas', 'avg standard dev in play %', 'regret']))
+
+        to_plot_df = pd.concat(to_plot)
+        x = list(to_plot_df['avg standard dev in play %'])
+        y = list(to_plot_df['regret'])
+        labels = to_plot_df['etas'].to_numpy()
+
+        return x, y, labels
+
+    def _get_interactive_data(self):
+        md = self.get_simulation_data()
+
+        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.products_list])
+
+        if self.ratings_style == BERNOULLI_RATINGS_NAME:
+            df = df.drop(columns=[self._data_cleaner.ratings_col])
+        df['agg_rating'] = df.to_numpy()/np.repeat(df.to_numpy().sum(axis=1)[:, np.newaxis],
+                                                   df.shape[1], axis=1) @ self._data_cleaner.weights
+        qual_dict = df['agg_rating'].to_dict()
+
+        df_to_return = {'eta': [], 'prod': [], 'true quality': [], 'play ratio': []}
+
+        for d in md:
+            eta = list(d.keys())[0][1]
+            for item in d:
+                prod = item[0]
+                tq = qual_dict[prod]
+                for lifespan in d[item]:
+                    if lifespan.shape[0] > 1:
+                        pr = (np.sum(lifespan[-1]) - np.sum(lifespan[0])) / (lifespan.shape[0] - 1)
+
+                        df_to_return['eta'].append(eta)
+                        df_to_return['prod'].append(prod)
+                        df_to_return['true quality'].append(tq)
+                        df_to_return['play ratio'].append(pr)
+
+        return pd.DataFrame(df_to_return)
+
+    def get_simulation_level_interactive_view(self, notebook=False):
+        """
+        Creates an interactive Dash figure to explore simulation results at a prior strength-level, showing a histogram
+        describing the distribution of the "play ratio" of products, i.e. the percentage of time a product was bought
+        during its lifetime in the market. The drop-down menu filters specifically for the simulation with the given
+        prior strength, while the slider filters on the true quality of products shown.
+
+        :param notebook: boolean representing whether or not Dash graph should be output to notebook.
+        :return: NoneType
+        """
+        df = self._get_interactive_data()
+
+        df['rounded true quality'] = df['true quality'].round()
+        df['rounded play ratio'] = (df['play ratio'] * 20).round() / 20
+        df = df.groupby(['eta', 'rounded true quality', 'rounded play ratio']).count().reset_index()[
+            ['eta', 'rounded true quality', 'rounded play ratio', 'play ratio']]
+
+        eta_list = list(df['eta'].unique())
+        dfs_to_plot = {}
+
+        for eta in eta_list:
+            df_to_plot = df[df['eta'] == eta]
+            to_add = []
+
+            for val in list(df['rounded play ratio'].unique()):
+                for rtq in list(df_to_plot['rounded true quality'].unique()):
+                    if val not in df_to_plot[df_to_plot['rounded true quality'] == rtq]['rounded play ratio']:
+                        temp_df = pd.DataFrame({'eta': eta,
+                                                'rounded true quality': rtq,
+                                                'rounded play ratio': val,
+                                                'play ratio': 0}, index=[0])
+                        to_add.append(temp_df)
+
+            df_to_plot = pd.concat(to_add + [df_to_plot])
+
+            dfs_to_plot[eta] = df_to_plot
+
+        slider_min, slider_max = df['rounded true quality'].min(), df['rounded true quality'].max()
+
+        df_to_plot = copy.deepcopy(dfs_to_plot[eta_list[0]])
+        df_to_plot = df_to_plot.sort_values('rounded true quality')
+        df_to_plot['rounded true quality'] = df_to_plot['rounded true quality'].astype(str)
+
+        cdmap = {k: v for k, v in zip(list(df_to_plot['rounded true quality'].unique()),
+                                      px.colors.qualitative.Alphabet[
+                                      :len(df_to_plot['rounded true quality'].unique())])}
+
+        fig = px.bar(df_to_plot,
+                     x='rounded play ratio',
+                     y='play ratio',
+                     color='rounded true quality',
+                     color_discrete_map=copy.deepcopy(cdmap))
+
+        fig.update_xaxes(title='play ratio')
+        fig.update_yaxes(title='count')
+        fig.update_layout(barmode='stack')
+
+        app = JupyterDash() if notebook else Dash()
+
+        app.layout = html.Div([
+            html.Div([
+                "Prior Strength (eta)",
+                dcc.Dropdown(
+                    eta_list,
+                    eta_list[0],
+                    id="eta_dropdown",
+                ),
+            ]),
+            dcc.Graph(figure=fig, id='eta_level_view'),
+            dcc.RangeSlider(slider_min, slider_max, 1, value=[slider_min, slider_max], id='rtq_slider')
+        ])
+
+        @app.callback(
+            Output('eta_level_view', 'figure'),
+            Input('eta_dropdown', 'value'),
+            Input('rtq_slider', 'value'))
+        def update_figure(value_dropdown, value_slider):
+
+            dtp = copy.deepcopy(dfs_to_plot[value_dropdown])
+            dtp = dtp[dtp['rounded true quality'].between(value_slider[0], value_slider[1])]
+            dtp = dtp.sort_values('rounded true quality')
+            dtp['rounded true quality'] = dtp['rounded true quality'].astype(str)
+
+            f = px.bar(dtp,
+                       x='rounded play ratio',
+                       y='play ratio',
+                       color='rounded true quality',
+                       color_discrete_map=copy.deepcopy(cdmap))
+
+            f.update_xaxes(title='play ratio')
+            f.update_yaxes(title='count')
+            f.update_layout(barmode='stack')
+
+            return f
+
+        if notebook:
+            print('eta value')
+            app.run_server(debug=True, use_reloader=False, mode="inline")
+        else:
+            app.run_server(debug=True, use_reloader=False)
+
+    def get_product_level_interactive_view(self, notebook=False):
+        """
+        Creates an interactive Dash figure that explores simulation data at the product level. The bar graph describes
+        for each selected product how many of each star rating it got over the selected simulations.
+
+        :param notebook: boolean representing whether or not Dash graph should be output to notebook.
+        :return: NoneType
+        """
+        weighting_data = []
+        data_weights = self._data_cleaner.weights
+        columns = ['eta', 'prod'] + ['c'+str(item) for item in list(data_weights)]
+
+        data = self._get_interactive_data()[['eta', 'prod', 'true quality']].drop_duplicates()
+        data2 = self.get_simulation_data()
+
+        for datadict in data2:
+            for (k1, k2) in datadict:
+                agg_ratings = np.zeros(len(data_weights))
+                for lifespan in datadict[(k1, k2)]:
+                    agg_ratings += lifespan[-1] - lifespan[0]
+                d = {k: v for k, v in zip(columns, [[k2], [k1]] + [[item] for item in list(np.round(agg_ratings))])}
+
+                weighting_data.append(pd.DataFrame(d))
+
+        weighting_data = pd.concat(weighting_data)
+
+        data = data.merge(weighting_data, on=['eta', 'prod'])
+        data = pd.wide_to_long(data, stubnames='c', i=['eta', 'prod', 'true quality'], j='rating').reset_index()
+        data['true quality'] = data['true quality'].round(2)
+
+        eta_dropdown_options = sorted(list(data['eta'].unique()))
+        prod_dropdown_options = sorted(list(data['prod'].unique()))
+
+        cdmap = {k: v for k, v in zip(list(data['eta'].unique()),
+                                      px.colors.qualitative.Alphabet[:len(data['eta'].unique())])}
+
+        mask = (data['eta'].isin(sorted([eta_dropdown_options[0]]))) & (
+                    data['prod'].isin(sorted([prod_dropdown_options[0]])))
+
+        fig = px.bar(data[mask],
+                     x='rating',
+                     y='c',
+                     color='eta',
+                     barmode='group',
+                     hover_name='prod',
+                     hover_data=['true quality'],
+                     color_discrete_map=cdmap)
+
+        fig.update_yaxes(title='count')
+
+        app = JupyterDash() if notebook else Dash()
+
+        app.layout = html.Div([
+            dcc.Graph(figure=fig, id='product_level_view'),
+            html.Div([
+                "etas",
+                dcc.Dropdown(
+                    eta_dropdown_options,
+                    [eta_dropdown_options[0]],
+                    id="eta_dropdown",
+                    multi=True
+                )
+            ]),
+            html.Div([
+                "products",
+                dcc.Dropdown(
+                    prod_dropdown_options,
+                    [prod_dropdown_options[0]],
+                    id="prod_dropdown",
+                    multi=True
+                ),
+            ]),
+        ])
+
+        @app.callback(
+            Output('product_level_view', 'figure'),
+            Input('eta_dropdown', 'value'),
+            Input('prod_dropdown', 'value'))
+        def update_figure(value_etas, value_products):
+            m = (data['eta'].isin(sorted(value_etas))) & (
+                data['prod'].isin(sorted(value_products)))
+
+            f = px.bar(data[m],
+                       x='rating',
+                       y='c',
+                       color='eta',
+                       barmode='group',
+                       hover_name='prod',
+                       hover_data=['true quality'],
+                       color_discrete_map=cdmap)
+
+            f.update_yaxes(title='count')
+
+            return f
+
+        if notebook:
+            app.run_server(debug=True, use_reloader=False, mode="inline")
+        else:
+            app.run_server(debug=True, use_reloader=False)
