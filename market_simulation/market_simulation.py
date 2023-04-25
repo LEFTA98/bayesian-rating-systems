@@ -58,6 +58,7 @@ class BayesianRatingsManager:
         self.output_market_data = []
         self.output_snapshots = []
         self.output_market_history = []
+        self.gen_dataframes = []
         self._prior_fitter = None
         self._data_cleaner = None
         self._simulation_runner = None
@@ -123,7 +124,7 @@ class BayesianRatingsManager:
     def run_simulations(self,
                         num_threads: int = DEFAULT_PROCESSES,
                         etas: Tuple[float, ...] = DEFAULT_ETA_VALUES,
-                        timesteps: int = sim.DEFAULT_NUM_TIMESTEPS,
+                        timesteps: Union[int, None] = None,
                         rho: float = sim.DEFAULT_RHO,
                         mkt_size: int = sim.DEFAULT_MKT_SIZE,
                         num_users: int = sim.DEFAULT_NUM_USERS,
@@ -149,6 +150,10 @@ class BayesianRatingsManager:
         rating_col = self._data_cleaner.ratings_col
 
         n_unique_prods = list(input_df[product_col].unique())
+
+        if not timesteps:
+            timesteps = int(100 * 1/rho * len(n_unique_prods))
+            print(f"defaulting to {timesteps} number of timesteps")
 
         prior_array = np.expand_dims(np.array(self.prior), 1)
         etas_array = np.expand_dims(np.array(etas), 1)
@@ -209,6 +214,67 @@ class BayesianRatingsManager:
         if verbose:
             print("Simulations complete.")
 
+    def gen_new_data(self,
+                     num_threads: int = DEFAULT_PROCESSES,
+                     etas: Tuple[float, ...] = DEFAULT_ETA_VALUES,
+                     timesteps: Union[int, None] = None,
+                     rho: float = sim.DEFAULT_RHO,
+                     mkt_size: int = sim.DEFAULT_MKT_SIZE,
+                     num_users: int = sim.DEFAULT_NUM_USERS,
+                     rng: Union[None, int] = None,
+                     verbose: bool = True) -> None:
+        if self._data_cleaner is None:
+            raise Exception("""No DataCleaner object is defined for this Bayesian Ratings system.
+                               Have you added data yet?""")
+        if self._prior_fitter is None:
+            raise Exception("""No PriorFitter object is defined for this Bayesian Ratings system.
+                               Have you added data yet?""")
+        if self._simulation_runner is None:
+            raise Exception("""No SimulationRunner object is defined for this Bayesian Ratings system.
+                               Have you added data yet?""")
+
+        if self.prior is None:
+            self.fit_prior()
+
+        input_df = self._data_cleaner.test_data
+        products = self._data_cleaner.products_list
+        weights = self._data_cleaner.weights
+        product_col = self._data_cleaner.product_col
+        rating_col = self._data_cleaner.ratings_col
+
+        n_unique_prods = list(input_df[product_col].unique())
+
+        if not timesteps:
+            timesteps = int(100 * 1/rho * len(n_unique_prods))
+            print(f"defaulting to {timesteps} number of timesteps")
+
+        prior_array = np.expand_dims(np.array(self.prior), 1)
+        etas_array = np.expand_dims(np.array(etas), 1)
+
+        priors_to_test = (prior_array @ etas_array.T).T
+        prior_names = [str(eta) for eta in etas]
+
+        if num_threads == 1:
+            data, gen_data, market_histories = self._simulation_runner.run_single_simulation(input_df,
+                                                                                             products,
+                                                                                             weights,
+                                                                                             priors_to_test[0],
+                                                                                             product_col,
+                                                                                             rating_col,
+                                                                                             timesteps=timesteps,
+                                                                                             rho=rho,
+                                                                                             mkt_size=mkt_size,
+                                                                                             num_users=num_users,
+                                                                                             seed=rng,
+                                                                                             id_name=prior_names[0])
+            self.output_market_data.append(data)
+            gen_data['eta'] = prior_names[0]
+            self.gen_dataframes.append(gen_data)
+            self.output_market_history.append(market_histories)
+
+            if verbose:
+                print("Simulations complete.")
+
     def get_snapshot_data(self):
         if not self.output_snapshots:
             raise Exception("No output data.")
@@ -268,13 +334,13 @@ class BayesianRatingsManager:
         labels = to_plot_df['etas'].to_numpy()
 
         fig, ax = plt.subplots()
-        fig.set_size_inches(12, 6)
+        fig.set_size_inches(18, 6)
         ax.scatter(x, y)
         plt.xlabel('Producer Consistency (average standard deviation in play %)')
         plt.ylabel('Consumer Efficiency (per-timestep regret)')
 
         for i in range(labels.shape[0]):
-            ax.annotate(f"{labels[i]}", (x[i], y[i]))
+            ax.annotate(f"$\\eta$={labels[i]}", (x[i], y[i]))
 
         if savefigs:
             plt.savefig(f"{dir_path}/{str(datetime.now())}+pareto curve.pdf")
@@ -312,7 +378,7 @@ class BayesianRatingsManager:
             plays_data[keys[i]] = get_binned_plays_array(data_dict[i], df, n_quants, cutoff=cutoff)
 
         f, axes = plt.subplots(1, len(keys))
-        f.set_size_inches(4*len(keys), 4)
+        f.set_size_inches(3*len(keys), 3)
 
         for j in range(len(keys)):
             plt.xlim((0, 1))
@@ -324,13 +390,13 @@ class BayesianRatingsManager:
                     plot_data['bin'].append(i + 1)
                     plot_data['val'].append(item)
 
-            plt.title(keys[j])
+            plt.title(f"$\\eta$={keys[j]}")
             if j == 0:
                 ylab = "true quality quartile"
             else:
                 ylab = None
 
-            xlab = 'play ratio $PR(v)$'
+            xlab = 'play ratio $P(l)$'
 
             plot_data = pd.DataFrame(plot_data)
             g = sns.violinplot(y=plot_data['bin'], x=plot_data['val'], inner=None, orient='h', palette='colorblind')
