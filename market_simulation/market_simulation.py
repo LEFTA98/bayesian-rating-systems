@@ -58,7 +58,7 @@ class BayesianRatingsManager:
         self.output_market_data = []
         self.output_snapshots = []
         self.output_market_history = []
-        self.gen_dataframes = []
+        self.dataframes_generated = []
         self._prior_fitter = None
         self._data_cleaner = None
         self._simulation_runner = None
@@ -255,21 +255,22 @@ class BayesianRatingsManager:
         prior_names = [str(eta) for eta in etas]
 
         if num_threads == 1:
-            data, gen_data, market_histories = self._simulation_runner.run_single_simulation(input_df,
-                                                                                             products,
-                                                                                             weights,
-                                                                                             priors_to_test[0],
-                                                                                             product_col,
-                                                                                             rating_col,
-                                                                                             timesteps=timesteps,
-                                                                                             rho=rho,
-                                                                                             mkt_size=mkt_size,
-                                                                                             num_users=num_users,
-                                                                                             seed=rng,
-                                                                                             id_name=prior_names[0])
+            data, gen_data, market_histories = \
+                self._simulation_runner.generate_new_data_from_simulations(input_df,
+                                                                           products,
+                                                                           weights,
+                                                                           priors_to_test[0],
+                                                                           product_col,
+                                                                           rating_col,
+                                                                           timesteps=timesteps,
+                                                                           rho=rho,
+                                                                           mkt_size=mkt_size,
+                                                                           num_users=num_users,
+                                                                           seed=rng,
+                                                                           id_name=prior_names[0])
             self.output_market_data.append(data)
             gen_data['eta'] = prior_names[0]
-            self.gen_dataframes.append(gen_data)
+            self.dataframes_generated.append(gen_data)
             self.output_market_history.append(market_histories)
 
             if verbose:
