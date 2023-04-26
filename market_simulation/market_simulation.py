@@ -144,7 +144,7 @@ class BayesianRatingsManager:
             self.fit_prior()
 
         input_df = self._data_cleaner.test_data
-        products = self._data_cleaner.products_list
+        products = self._data_cleaner.test_products_list
         weights = self._data_cleaner.weights
         product_col = self._data_cleaner.product_col
         rating_col = self._data_cleaner.ratings_col
@@ -237,7 +237,7 @@ class BayesianRatingsManager:
             self.fit_prior()
 
         input_df = self._data_cleaner.test_data
-        products = self._data_cleaner.products_list
+        products = self._data_cleaner.test_products_list
         weights = self._data_cleaner.weights
         product_col = self._data_cleaner.product_col
         rating_col = self._data_cleaner.ratings_col

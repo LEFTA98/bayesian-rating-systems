@@ -28,6 +28,7 @@ class DataCleaner:
         self.test_data = None
         self.weights = None
         self.products_list = None
+        self.test_products_list = None
 
     def ingest(self,
                data: pd.DataFrame,
@@ -60,6 +61,7 @@ class DataCleaner:
         self.product_col = product_col
         self.ratings_col = ratings_col
         self.products_list = list(set(data[product_col]))
+        self.test_products_list = list(set(self.test_quality.index))
 
     def upsample(self, num_samples: int) -> None:
         percentiles = np.linspace(0, 100, num_samples + 1) / 100
@@ -75,4 +77,4 @@ class DataCleaner:
         percentiles = percentiles[:-1]  # 100th percentile doesn't exist omit it
         sampled_products = list(df.iloc[percentiles].index)
         self.test_data = self.test_data[self.test_data[self.product_col].isin(sampled_products)]
-        self.products_list = sampled_products
+        self.test_products_list = sampled_products
