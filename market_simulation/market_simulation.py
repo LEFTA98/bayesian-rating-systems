@@ -317,7 +317,7 @@ class BayesianRatingsManager:
         qual_dict = df['agg_rating'].to_dict()
         qfunc = np.vectorize(lambda x: qual_dict[x])
 
-        md, ss, mh = self.get_simulation_data(), self.get_snapshot_data(), self.get_market_data()
+        md, mh = self.get_simulation_data(), self.get_market_data()
 
         to_plot = []
 
