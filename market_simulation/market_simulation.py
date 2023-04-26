@@ -404,9 +404,11 @@ class BayesianRatingsManager:
             g = sns.violinplot(y=plot_data['bin'], x=plot_data['val'], inner=None, orient='h', palette='colorblind')
             if j != 0:
                 g.set(yticklabels=[], yticks=[])
-            axes[j].scatter(x=plot_data.groupby('bin').mean()['val'].values,
-                        y=plot_data.groupby('bin').mean()['val'].index - 1,
-                        color='white', s=100, edgecolors='black')
+
+            plt_object = axes if len(keys) == 1 else axes[j]
+            plt_object.scatter(x=plot_data.groupby('bin').mean()['val'].values,
+                               y=plot_data.groupby('bin').mean()['val'].index - 1,
+                               color='white', s=100, edgecolors='black')
             g.set(ylabel=ylab, xlabel=xlab)
 
         if savefigs:
