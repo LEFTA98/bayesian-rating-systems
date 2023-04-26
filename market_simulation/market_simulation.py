@@ -270,9 +270,38 @@ class BayesianRatingsManager:
                                                                            seed=rng,
                                                                            id_name=prior_names[0])
             self.output_market_data.append(data)
-            gen_data['eta'] = prior_names[0]
             self.dataframes_generated.append(gen_data)
             self.output_market_history.append(market_histories)
+        else:
+            with tqdm_joblib(tqdm(desc="Simulation progress", total=len(prior_names))) as progress_bar:
+                parallel = Parallel(n_jobs=min(len(etas), num_threads), verbose=10)
+                result_data = parallel(delayed(
+                    self._simulation_runner.generate_new_data_from_simulations)(input_df,
+                                                                                products,
+                                                                                weights,
+                                                                                priors_to_test[i],
+                                                                                product_col,
+                                                                                rating_col,
+                                                                                timesteps=timesteps,
+                                                                                rho=rho,
+                                                                                mkt_size=mkt_size,
+                                                                                num_users=num_users,
+                                                                                seed=rng,
+                                                                                id_name=prior_names[i],
+                                                                                show_tqdm=False)
+                                       for i in range(len(prior_names)))
+
+                result_data = list(result_data)
+            for data, gen_data, market_histories in result_data:
+                self.output_market_data.append(data)
+                self.dataframes_generated.append(gen_data)
+                self.output_market_history.append(market_histories)
+
+                covered_products = np.unique(market_histories[:, :-1])
+                eta = list(data.keys())[0][1]
+
+                if covered_products.shape[0] < len(n_unique_prods):
+                    warnings.warn(f"WARNING: Not all products in universe appeared in simulation for eta={eta}")
 
             if verbose:
                 print("Simulations complete.")
@@ -309,7 +338,7 @@ class BayesianRatingsManager:
                 a.append(np.std(l_array))
 
             return np.mean(a)
-        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.products_list])
+        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.test_products_list])
 
         if self.ratings_style == BERNOULLI_RATINGS_NAME:
             df = df.drop(columns=[self._data_cleaner.ratings_col])
@@ -365,7 +394,7 @@ class BayesianRatingsManager:
 
             return p_data
 
-        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.products_list])
+        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.test_products_list])
 
         if self.ratings_style == BERNOULLI_RATINGS_NAME:
             df = df['liked']
@@ -445,7 +474,7 @@ class BayesianRatingsManager:
                 a.append(np.std(l_array))
 
             return np.mean(a)
-        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.products_list])
+        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.test_products_list])
 
         if self.ratings_style == BERNOULLI_RATINGS_NAME:
             df = df.drop(columns=[self._data_cleaner.ratings_col])
@@ -476,7 +505,7 @@ class BayesianRatingsManager:
     def _get_interactive_data(self):
         md = self.get_simulation_data()
 
-        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.products_list])
+        df = copy.deepcopy(self._data_cleaner.test_quality.loc[self._data_cleaner.test_products_list])
 
         if self.ratings_style == BERNOULLI_RATINGS_NAME:
             df = df.drop(columns=[self._data_cleaner.ratings_col])

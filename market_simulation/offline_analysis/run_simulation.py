@@ -228,4 +228,7 @@ class SimRunner:
             for k in list(helper.universe.keys())[:]:
                 helper.universe[(k, id_name)] = helper.universe.pop(k)
 
-        return helper.universe, pd.DataFrame(df_to_return), np.array(market_history)
+        df_to_return = pd.DataFrame(df_to_return)
+        df_to_return['eta'] = id_name
+
+        return helper.universe, df_to_return, np.array(market_history)
