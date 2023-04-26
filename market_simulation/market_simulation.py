@@ -384,7 +384,8 @@ class BayesianRatingsManager:
         for j in range(len(keys)):
             plt.xlim((0, 1))
             plot_data = {'bin': [], 'val': []}
-            plt.sca(axes[j])
+            if len(keys) > 1:
+                plt.sca(axes[j])
 
             for i in range(len(plays_data[keys[j]])):
                 for item in plays_data[keys[j]][i]:
