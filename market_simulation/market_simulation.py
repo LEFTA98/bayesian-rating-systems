@@ -70,6 +70,7 @@ class BayesianRatingsManager:
                  product_col: str,
                  ratings_col: str,
                  ratings_style: Union[None, str] = None,
+                 split: float = 0.4,
                  cutoff: Union[None, int] = None,
                  rng: Union[None, int] = None,
                  verbose: bool = True) -> None:
@@ -92,7 +93,7 @@ class BayesianRatingsManager:
         self._data_cleaner = DataCleaner(self.ratings_style)
         self._simulation_runner = SimRunner(self.ratings_style, self.selection_style)
 
-        self._data_cleaner.ingest(data, product_col, ratings_col, cutoff=cutoff, rng=rng)
+        self._data_cleaner.ingest(data, product_col, ratings_col, split=split, cutoff=cutoff, rng=rng)
 
     def upsample(self, num_samples: int = 100, verbose: bool = True):
         if self._data_cleaner is None:
